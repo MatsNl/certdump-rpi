@@ -1,0 +1,26 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: certdump
+spec:
+  schedule: "0 0 1 */1 *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: cert-dump
+            image: mpenelissen/certdump-rpi
+            workingDir: /certs
+            args:
+            - -c
+            - curl -X GET http://consul.local:8500/v1/kv/traefik/acme/account/object | jq -c '.[0]["Value"]' | base64 -d | gzip -dc | jq -r '.DomainsCertificate.Certs[] | select(.Domains.Main=="'*.MYDOMAIN.COM'") | .Certificate' > acme.json && cat acme.json | jq -r '.Certificate' | base64 -d > fullchain.pem && cat acme.json | jq -r '.PrivateKey' | base64 -d > privkey.pem
+            volumeMounts:
+            - mountPath: /certs
+              name: certs
+          restartPolicy: OnFailure
+          volumes:
+          - name: certs
+            persistentVolumeClaim:
+              claimName: certs
+
